@@ -1,10 +1,12 @@
 from PyQt5.QtWidgets import (QApplication, QGridLayout, QGroupBox, QDialog, QTableView, QListWidgetItem,
                              QLabel, QSlider, QVBoxLayout, QMainWindow, QLineEdit, QListWidget,
                              QMessageBox, QComboBox, QTableWidgetItem, QAbstractItemView, QCheckBox, QWidget,
-                             qApp, QAction, QDesktopWidget, QMenu, QTabWidget, QTextEdit)
+                             qApp, QAction, QDesktopWidget, QMenu, QTabWidget, QTextEdit, QFileDialog)
 from PyQt5.QtGui import QStandardItemModel, QStandardItem, QTextCursor, QIcon, QFont
 from PyQt5.QtCore import Qt, QSize, QRect, QMetaObject, QCoreApplication
 import sys
+import os
+import traceback
 from preprocess import Preprocess
 from segmentation import Segmentation
 
@@ -97,6 +99,7 @@ class App(QMainWindow):
         self.functionbar.setLayoutDirection(Qt.LeftToRight)
         self.functionbar.setTabBarAutoHide(False)
         self.preprocess = Preprocess()
+        # self.preprocess.rawFolderBtn.clicked.connect(self.chooseRawFolder)
         self.segmentation = Segmentation()
         self.functionbar.addTab(self.preprocess, "Preprocess")  # 将不同功能的widget放入选项菜单栏
         self.functionbar.addTab(self.segmentation, "Segmentation")
@@ -104,10 +107,6 @@ class App(QMainWindow):
         self.functionbar.currentChanged.connect(self.updateBlankInfo) #功能卡的变化会调用updateBlankInfo这个函数
 
         mainlayout.addWidget(self.functionbar, 1, 0, 1, 1)  # 将选项菜单栏放入主组件的栅格布局中,位置为第1行第0列
-
-        self.textEdit = QTextEdit() #初始化反馈信息栏
-        self.textEdit.setFocusPolicy(Qt.NoFocus) #将反馈信息栏设置为无法主动编辑
-        mainlayout.addWidget(self.textEdit, 2, 0, 2, 1) #将反馈信息栏添加到主组件中,位置为第2行第0列跨两行显示
 
         self.setCentralWidget(mainwidget)  # 将主组件放入主窗口
         self.resize(600, 720)  # 设置窗口大小
@@ -163,10 +162,9 @@ class App(QMainWindow):
         :return:
         """
         if self.functionbar.currentIndex() == 0:
-            self.textEdit.setText('0')
+            self.preprocess.textEdit.setText('0')
         if self.functionbar.currentIndex() == 1:
-            self.textEdit.setText("1")
-
+            pass
 
 
 if __name__ == '__main__':
