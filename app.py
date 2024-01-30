@@ -9,6 +9,8 @@ import os
 import traceback
 from preprocess import Preprocess
 from segmentation import Segmentation
+from analysis import Analysis
+from train import Train
 
 
 class App(QMainWindow):
@@ -99,10 +101,13 @@ class App(QMainWindow):
         self.functionbar.setLayoutDirection(Qt.LeftToRight)
         self.functionbar.setTabBarAutoHide(False)
         self.preprocess = Preprocess()
-        # self.preprocess.rawFolderBtn.clicked.connect(self.chooseRawFolder)
         self.segmentation = Segmentation()
+        self.analysis = Analysis()
+        self.train = Train()
         self.functionbar.addTab(self.preprocess, "Preprocess")  # 将不同功能的widget放入选项菜单栏
         self.functionbar.addTab(self.segmentation, "Segmentation")
+        self.functionbar.addTab(self.analysis, "Analysis")
+        self.functionbar.addTab(self.train, "Train")
         self.functionbar.setCurrentIndex(0) #这个函数可以通过下标设置初始化打开那个功能, 默认是第一个
         self.functionbar.currentChanged.connect(self.updateBlankInfo) #功能卡的变化会调用updateBlankInfo这个函数
 
@@ -161,10 +166,27 @@ class App(QMainWindow):
         用来同步更新参数
         :return:
         """
-        if self.functionbar.currentIndex() == 0:
-            self.preprocess.textEdit.setText('0')
         if self.functionbar.currentIndex() == 1:
-            pass
+            if self.preprocess.projectFolderEdit.text():
+                self.segmentation.projectFolderEdit.setText(self.preprocess.projectFolderEdit.text())
+                self.segmentation.embryoNamesBtn.clear()
+                if os.path.isdir(os.path.join(self.segmentation.projectFolderEdit.text(), "RawStack")):
+                    listdir = [x for x in os.listdir(os.path.join(self.segmentation.projectFolderEdit.text(), "RawStack")) if not x.startswith(".")].sort()
+                    self.segmentation.embryoNamesBtn.addItems(listdir)
+                else:
+                    os.makedirs(os.path.join(self.segmentation.projectFolderEdit.text(), "RawStack"))
+            if self.preprocess.maxTimeEdit.text():
+                self.segmentation.maxTimeEdit.setText(self.preprocess.maxTimeEdit.text())
+
+
+        if self.functionbar.currentIndex() == 2:
+            if self.preprocess.rawFolderEdit.text():
+                self.analysis.rawFolderEdit.setText(self.preprocess.rawFolderEdit.text())
+                self.analysis.embryoNamesBtn.clear()
+                listdir = [x for x in os.listdir(self.preprocess.rawFolderEdit.text()) if not x.startswith(".")]
+                listdir.sort()
+                self.analysis.embryoNamesBtn.addItems(listdir)
+
 
 
 if __name__ == '__main__':
