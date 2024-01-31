@@ -39,24 +39,6 @@ class App(QMainWindow):
         filebutton3.setStatusTip("Load a origin project")
         fileMenu.addAction(filebutton3)
 
-        editMenu = menubar.addMenu("Edit")  # 添加Edit选项到菜单栏
-
-        editbutton1 = QAction("Undo", self)  # 添加Undo按钮到Edit选项
-        editbutton1.setStatusTip("undo")
-        editMenu.addAction(editbutton1)
-
-        editbutton2 = QAction("Redo", self)  # 添加Redo按钮到Edit选项
-        editbutton2.setStatusTip("Redo")
-        editMenu.addAction(editbutton2)
-
-        editbutton3 = QAction("Copy", self)  # 添加Copy按钮到Edit选项
-        editbutton3.setStatusTip("Copy")
-        editMenu.addAction(editbutton3)
-
-        editbutton4 = QAction("Paste", self)  # 添加Paste按钮到Edit选项
-        editbutton4.setStatusTip("Paste")
-        editMenu.addAction(editbutton4)
-
         runMenu = menubar.addMenu("Run")  # 添加Run选项到菜单栏
 
         runbutton1 = QAction("Run Preprocess", self)  # 添加run preprocess按钮到Run选项
@@ -144,6 +126,7 @@ class App(QMainWindow):
         qr.moveCenter(cp)  # 将框架中心移动到屏幕中心
         self.move(qr.topLeft())  # 将主窗口左上角与框架左上角对齐
 
+
     def contextMenuEvent(self, event):
         """
         右键菜单
@@ -158,20 +141,34 @@ class App(QMainWindow):
         clearAct = cmenu.addAction("Clear")
         action = cmenu.exec_(self.mapToGlobal(event.pos()))
 
-        if action == runAct:
-            pass
+        if action == clearAct:
+            if self.functionbar.currentIndex() == 0:
+                for item in self.preprocess.findChildren((QLineEdit, QComboBox)):
+                    if not item is self.preprocess.findChild(QComboBox, "preprocessObject"):
+                        item.clear()
+            if self.functionbar.currentIndex() == 1:
+                for item in self.segmentation.findChildren((QLineEdit, QComboBox)):
+                    item.clear()
+            if self.functionbar.currentIndex() == 2:
+                for item in self.analysis.findChildren((QLineEdit, QComboBox)):
+                    item.clear()
+            if self.functionbar.currentIndex() == 3:
+                for item in self.train.findChildren((QLineEdit, QComboBox)):
+                    item.clear()
+
 
     def updateBlankInfo(self):
         """
         用来同步更新参数
         :return:
         """
-        if self.functionbar.currentIndex() == 1:
+        if self.functionbar.currentIndex() == 1: #当按钮点到segmentation
             if self.preprocess.projectFolderEdit.text():
                 self.segmentation.projectFolderEdit.setText(self.preprocess.projectFolderEdit.text())
                 self.segmentation.embryoNamesBtn.clear()
                 if os.path.isdir(os.path.join(self.segmentation.projectFolderEdit.text(), "RawStack")):
-                    listdir = [x for x in os.listdir(os.path.join(self.segmentation.projectFolderEdit.text(), "RawStack")) if not x.startswith(".")].sort()
+                    listdir = [x for x in os.listdir(os.path.join(self.segmentation.projectFolderEdit.text(), "RawStack")) if not x.startswith(".")]
+                    listdir.sort()
                     self.segmentation.embryoNamesBtn.addItems(listdir)
                 else:
                     os.makedirs(os.path.join(self.segmentation.projectFolderEdit.text(), "RawStack"))
@@ -179,13 +176,19 @@ class App(QMainWindow):
                 self.segmentation.maxTimeEdit.setText(self.preprocess.maxTimeEdit.text())
 
 
-        if self.functionbar.currentIndex() == 2:
+        if self.functionbar.currentIndex() == 2: #当按钮点到analysis
             if self.preprocess.rawFolderEdit.text():
                 self.analysis.rawFolderEdit.setText(self.preprocess.rawFolderEdit.text())
                 self.analysis.embryoNamesBtn.clear()
                 listdir = [x for x in os.listdir(self.preprocess.rawFolderEdit.text()) if not x.startswith(".")]
                 listdir.sort()
                 self.analysis.embryoNamesBtn.addItems(listdir)
+            if self.preprocess.xyResoluEdit.text():
+                self.analysis.xyResoluEdit.setText(self.preprocess.xyResoluEdit.text())
+            if self.preprocess.sliceNumEdit.text():
+                self.analysis.sliceNumEdit.setText(self.preprocess.sliceNumEdit.text())
+            if self.preprocess.projectFolderEdit.text():
+                self.analysis.projectFolderEdit.setText(self.preprocess.projectFolderEdit.text())
 
 
 
