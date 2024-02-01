@@ -408,13 +408,13 @@ class PreprocessThread(QThread):
                 if self.isCancel:
                     break
                 configs1 = (
-                origin_files1, target_folder1, self.embryo_name, tp, self.out_size, self.num_slice, self.out_res)
+                    origin_files1, target_folder1, self.embryo_name, tp, self.out_size, self.num_slice, self.out_res)
                 configs2 = (
-                origin_files2, target_folder2, self.embryo_name, tp, self.out_size, self.num_slice, self.out_res)
+                    origin_files2, target_folder2, self.embryo_name, tp, self.out_size, self.num_slice, self.out_res)
                 t.submit(stack_memb_slices, configs1)
-                self.preprocessbarSignal.emit(tp, self.max_time * 2)
+                self.preprocessbarSignal.emit(2 * tp - 1, self.max_time * 2)
                 t.submit(stack_nuc_slices, configs2)
-                self.preprocessbarSignal.emit(tp + 1, self.max_time * 2)
+                self.preprocessbarSignal.emit(2 * tp, self.max_time * 2)
                 self.sleep(1)
                 self.mutex.unlock()
 
