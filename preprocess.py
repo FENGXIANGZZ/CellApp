@@ -4,14 +4,15 @@ import traceback
 import glob
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Pool, cpu_count
-from tkinter import Image
-
+from PIL import Image
 import numpy as np
+import re
 from PyQt5.QtWidgets import (QWidget, QLabel, QLineEdit,
                              QTextEdit, QGridLayout, QApplication, QPushButton, QFileDialog, QMessageBox,
                              QComboBox, QVBoxLayout, QProgressBar, QHBoxLayout)
-from PyQt5.QtCore import Qt, pyqtSignal, QThread
-from Utils.preprocess_lib import stack_nuc_slices
+from PyQt5.QtCore import Qt, pyqtSignal, QThread, QMutex, QWaitCondition
+from Utils.preprocess_lib import stack_nuc_slices, stack_memb_slices
+
 
 class Preprocess(QWidget):
 
@@ -22,15 +23,27 @@ class Preprocess(QWidget):
 
         self.initUI()  # 设置参数相关的各种组件位置
 
-        self.middlelayout = QHBoxLayout()
+        self.middlelayout = QGridLayout()
+
         self.runpreprocessBtn = QPushButton("Run Preprocess")
         self.runpreprocessBtn.clicked.connect(self.runPreprocess)
-        self.stoppreprocessBtn = QPushButton("Stop Preprocess")
-        self.stoppreprocessBtn.clicked.connect(self.stopPreprocess)
+        self.cancelpreprocessBtn = QPushButton("Cancel Preprocess")
+        self.cancelpreprocessBtn.setEnabled(False)
+        self.cancelpreprocessBtn.clicked.connect(self.cancelPreprocess)
+        self.pausepreprocessBtn = QPushButton("Pause Preprocess")
+        self.pausepreprocessBtn.setEnabled(False)
+        self.pausepreprocessBtn.clicked.connect(self.pausePreprocess)
+        self.resumepreprocessBtn = QPushButton("Resume Preprocess")
+        self.resumepreprocessBtn.setEnabled(False)
+        self.resumepreprocessBtn.clicked.connect(self.resumePreprocess)
         self.preprocessBar = QProgressBar()
-        self.middlelayout.addWidget(self.runpreprocessBtn)
-        self.middlelayout.addWidget(self.stoppreprocessBtn)
-        self.middlelayout.addWidget(self.preprocessBar)
+        self.preprocessBar.valueChanged.connect(self.completePreprocess)
+
+        self.middlelayout.addWidget(self.runpreprocessBtn, 0, 1)
+        self.middlelayout.addWidget(self.cancelpreprocessBtn, 0, 2)
+        self.middlelayout.addWidget(self.pausepreprocessBtn, 2, 1)
+        self.middlelayout.addWidget(self.resumepreprocessBtn, 2, 2)
+        self.middlelayout.addWidget(self.preprocessBar, 1, 3)
         self.mainlayout.addStretch(1)
         self.mainlayout.addLayout(self.middlelayout)
 
@@ -62,10 +75,12 @@ class Preprocess(QWidget):
         self.sliceNumEdit = QLineEdit()
         self.maxTimeEdit = QLineEdit()
         self.projectFolderEdit = QLineEdit()
+        self.projectFolderEdit.setPlaceholderText("Save Path")
         # 栅格布局第三列是参数选择按钮
         rawFolderBtn = QPushButton("Select")
         rawFolderBtn.clicked.connect(self.chooseRawFolder)  # 将这个按钮点击事件与函数chooseRawFolder绑定
         self.embryoNameBtn = QComboBox()
+        self.embryoNameBtn.activated[str].connect(self.Autofillblank)
         projectFolderBtn = QPushButton("Select")
         projectFolderBtn.clicked.connect(self.chooseProjectFolder)
         self.preprocessObjectBtn = QComboBox()
@@ -136,10 +151,27 @@ class Preprocess(QWidget):
             self.textEdit.append(traceback.format_exc())
             QMessageBox.warning(self, 'Warning!', 'Please Choose Right Folder!')
 
+    def Autofillblank(self, embryo_name):
+        try:
+            raw_memb_files = glob.glob(os.path.join(self.rawFolderEdit.text(), embryo_name, "tifR", "*.tif"))
+            raw_memb_img = raw_memb_files[-1]
+            max_time = re.findall(r"\d{2,3}", raw_memb_img)[-2]
+            num_slice = re.findall(r"\d{2,3}", raw_memb_img)[-1]
+
+            self.maxTimeEdit.setText(max_time)
+            self.sliceNumEdit.setText(num_slice)
+            self.xyResoluEdit.setText("0.99")
+            self.zResoluEdit.setText("0.42")
+            self.reduceRationEdit.setText("1.0")
+        except:
+            self.textEdit.setText(traceback.format_exc())
+            QMessageBox.warning(self, 'Error!', 'Please check your paras!')
+
     def runPreprocess(self):
 
         config = {}
         try:
+
             self.textEdit.clear()
             config['num_slice'] = int(self.sliceNumEdit.text())
             config["embryo_name"] = self.embryoNameBtn.currentText()
@@ -157,32 +189,88 @@ class Preprocess(QWidget):
             QMessageBox.warning(self, 'Error!', 'Please check your paras!')
 
         if config:
-            self.textEdit.append('Running Preprocess!')
-            for key, value in config.items():
-                self.textEdit.append(f"The {key} is: {value}")
+            try:
+                if config["preprocess_object"] == "Membrane":
+                    raw_memb_files = glob.glob(
+                        os.path.join(config["raw_folder"], config["embryo_name"], "tifR", "*.tif"))
+                    assert config['num_slice'] * config["max_time"] == len(raw_memb_files)
+                elif config["preprocess_object"] == "Nucleus":
+                    raw_nuc_files = glob.glob(os.path.join(config["raw_folder"], config["embryo_name"], "tif", "*.tif"))
+                    assert config['num_slice'] * config["max_time"] == len(raw_nuc_files)
+                else:
+                    raw_memb_files = glob.glob(
+                        os.path.join(config["raw_folder"], config["embryo_name"], "tifR", "*.tif"))
+                    raw_nuc_files = glob.glob(os.path.join(config["raw_folder"], config["embryo_name"], "tif", "*.tif"))
+                    assert len(raw_memb_files) == len(raw_nuc_files)
+                    assert config['num_slice'] * config["max_time"] == len(raw_memb_files)
 
-            self.runpreprocessBtn.setEnabled(False)
+                self.textEdit.append('Running Preprocess!')
+                for key, value in config.items():
+                    self.textEdit.append(f"The {key} is: {value}")
 
-            self.pthread = PreprocessThread(config)
+                self.runpreprocessBtn.setEnabled(False)
+                self.resumepreprocessBtn.setEnabled(False)
+                self.cancelpreprocessBtn.setEnabled(True)
+                self.pausepreprocessBtn.setEnabled(True)
+                self.preprocessBar.reset()
 
-            self.pthread.start()
+                self.pthread = PreprocessThread(config)
 
-            self.pthread.finished.connect(self.completePreprocess)
+                self.pthread.preprocessbarSignal.connect(self.showpreprocessbar)
 
-    def stopPreprocess(self):
+                self.pthread.start()
+            except:
+                self.textEdit.append(traceback.format_exc())
+                QMessageBox.warning(self, 'Error!', 'The number of picture is incorrect!')
+
+    def cancelPreprocess(self):
         try:
+            self.pthread.cancel()
             self.runpreprocessBtn.setEnabled(True)
-            self.textEdit.clear()
-            self.pthread.quit()
+            self.resumepreprocessBtn.setEnabled(False)
+            self.cancelpreprocessBtn.setEnabled(False)
+            self.pausepreprocessBtn.setEnabled(False)
+            self.preprocessBar.reset()
+            self.textEdit.setText("Preprocess Cancel!")
             QMessageBox.information(self, 'Tips', 'Preprocess has been terminated.')
         except Exception:
             self.textEdit.append(traceback.format_exc())
-            QMessageBox.warning(self, 'Warning!', 'Preprocess has not been started.')
+            QMessageBox.warning(self, 'Warning!', 'Preprocess cancel fail!.')
 
-    def completePreprocess(self):
-        self.textEdit.setText("Preprocess Complete!")
-        self.runpreprocessBtn.setEnabled(True)
-        self.preprocessBar.setValue(100)
+    def pausePreprocess(self):
+        try:
+            self.pthread.pause()
+            self.runpreprocessBtn.setEnabled(False)
+            self.resumepreprocessBtn.setEnabled(True)
+            self.cancelpreprocessBtn.setEnabled(True)
+            self.pausepreprocessBtn.setEnabled(False)
+            self.textEdit.append("Preprocess Suspend!")
+        except Exception:
+            self.textEdit.append(traceback.format_exc())
+            QMessageBox.warning(self, 'Warning!', 'Preprocess pause fail!.')
+
+    def resumePreprocess(self):
+        try:
+            self.pthread.resume()
+            self.runpreprocessBtn.setEnabled(False)
+            self.resumepreprocessBtn.setEnabled(False)
+            self.cancelpreprocessBtn.setEnabled(True)
+            self.pausepreprocessBtn.setEnabled(True)
+            self.textEdit.append("Preprocess Restart!")
+        except Exception:
+            self.textEdit.append(traceback.format_exc())
+            QMessageBox.warning(self, 'Warning!', 'Preprocess resume fail!.')
+
+    def completePreprocess(self, value):
+        if value == 100:
+            self.textEdit.append("Preprocess Complete!")
+            self.runpreprocessBtn.setEnabled(True)
+            self.cancelpreprocessBtn.setEnabled(False)
+            self.pausepreprocessBtn.setEnabled(False)
+            self.resumepreprocessBtn.setEnabled(False)
+
+    def showpreprocessbar(self, current, total):
+        self.preprocessBar.setValue(current * 100 / total)
 
 
 """QT 中 QObject 作QT中类的最终父类，具有自定义信号与槽的能力，只要继承自这个类的类，也一样拥有自定义信号和槽的能力。
@@ -190,10 +278,11 @@ QT 中定义信号与槽是十分有用的，QT 下多线程类QThread 是继承
 
 
 class PreprocessThread(QThread):
+    preprocessbarSignal = pyqtSignal(int, int)
 
     def __init__(self, config={}):
         super().__init__()
-        # load parameters
+        # 从配置中获取参数
         self.num_slice = config["num_slice"]
         self.embryo_name = config["embryo_name"]
         self.max_time = config["max_time"]
@@ -204,7 +293,7 @@ class PreprocessThread(QThread):
         self.stack_folder = os.path.join(config["project_folder"], "RawStack")
         self.preprocess_object = config['preprocess_object']
 
-        # get output size
+        # 计算相关参数
         raw_memb_files = glob.glob(os.path.join(self.raw_folder, self.embryo_name, "tifR", "*.tif"))
         self.raw_size = list(np.asarray(Image.open(raw_memb_files[0])).shape) + [
             int(self.num_slice * self.z_res / self.xy_res)]
@@ -212,14 +301,30 @@ class PreprocessThread(QThread):
         self.out_res = [res * x / y for res, x, y in
                         zip([self.xy_res, self.xy_res, self.xy_res], self.raw_size, self.out_size)]
 
+        # 与线程运行有关
+        self.isCancel = False
+        self.isPause = False
+        self.cond = QWaitCondition()
+        self.mutex = QMutex()
+
+    def cancel(self):
+        self.isCancel = True
+
+    def pause(self):
+        self.isPause = True
+
+    def resume(self):
+        self.isPause = False
+        self.cond.wakeAll()
+
     def run(self):
         try:
             if self.preprocess_object == "Nucleus":
                 self.combine_nucleus_slices()
             elif self.preprocess_object == "Membrane":
-                pass
+                self.combine_memb_slices()
             else:
-                pass
+                self.combine_both_slices()
 
         except Exception:
             self.quit()
@@ -237,64 +342,81 @@ class PreprocessThread(QThread):
         if not os.path.isdir(target_folder):
             os.makedirs(target_folder)
 
-        configs = []
-        for tp in range(1, self.max_time + 1):
-            configs.append((origin_files, target_folder, self.embryo_name, tp, self.out_size, self.num_slice, self.out_res))
+        with ThreadPoolExecutor(cpu_count() + 1) as t:
+            for tp in range(1, self.max_time + 1):
+                self.mutex.lock()
+                if self.isPause:
+                    self.cond.wait(self.mutex)
+                if self.isCancel:
+                    break
+                configs = (
+                    origin_files, target_folder, self.embryo_name, tp, self.out_size, self.num_slice, self.out_res)
+                t.submit(stack_nuc_slices, configs)
+                self.preprocessbarSignal.emit(tp, self.max_time)
+                self.sleep(1)
+                self.mutex.unlock()
+
+    def combine_memb_slices(self):
+        """
+        Combine slices into stack images
+        :param config: parameters
+        :return:
+        """
+        # save nucleus
+        origin_files = glob.glob(os.path.join(self.raw_folder, self.embryo_name, "tifR", "*.tif"))
+        origin_files.sort()
+        target_folder = os.path.join(self.stack_folder, self.embryo_name, "RawMemb")
+        if not os.path.isdir(target_folder):
+            os.makedirs(target_folder)
 
         with ThreadPoolExecutor(cpu_count() + 1) as t:
-            for idx, config in enumerate(configs):
-                t.submit(stack_nuc_slices, config)
+            for tp in range(1, self.max_time + 1):
+                self.mutex.lock()
+                if self.isPause:
+                    self.cond.wait(self.mutex)
+                if self.isCancel:
+                    break
+                configs = (
+                    origin_files, target_folder, self.embryo_name, tp, self.out_size, self.num_slice, self.out_res)
+                t.submit(stack_memb_slices, configs)
+                self.preprocessbarSignal.emit(tp, self.max_time)
+                self.sleep(1)
+                self.mutex.unlock()
 
+    def combine_both_slices(self):
+        """
+        Combine slices into stack images
+        :param config: parameters
+        :return:
+        """
+        origin_files1 = glob.glob(os.path.join(self.raw_folder, self.embryo_name, "tifR", "*.tif"))
+        origin_files1.sort()
+        target_folder1 = os.path.join(self.stack_folder, self.embryo_name, "RawMemb")
 
-    # multiprocessing
-    # self.mpPool = Pool(cpu_count() + 1)
-    # for embryo_name in embryo_names:
-    #
-    #     # save membrane
-    #     origin_files = glob.glob(os.path.join(raw_folder, embryo_name, "tifR", "*.tif"))
-    #     origin_files = sorted(origin_files)
-    #     target_folder = os.path.join(stack_folder, embryo_name, "RawMemb")
-    #     if not os.path.isdir(target_folder):
-    #         os.makedirs(target_folder)
-    #
-    #     configs = []
-    #     for tp in range(1, max_time + 1):
-    #         configs.append((origin_files, target_folder, embryo_name, tp, out_size, num_slice, out_res))
-    #     self.flag = True
-    #     for idx, _ in enumerate(tqdm(self.mpPool.imap_unordered(stack_memb_slices, configs), total=len(configs),
-    #                                  desc="2/3 Stack membrane of {}".format(embryo_name))):
-    #         process.emit('2/3 Stacking membrane', idx, max_time)
-    #         if not self.flag:
-    #             self.mpPool.close()
-    #             return 0
-    #
-    #     # save nucleus
-    #     if lineage_file is not None:
-    #         target_folder = os.path.join(stack_folder, embryo_name, "SegNuc")
-    #         if not os.path.isdir(target_folder):
-    #             os.makedirs(target_folder)
-    #         pd_lineage = pd.read_csv(lineage_file, dtype={"cell": str,
-    #                                                       "time": np.int16,
-    #                                                       "z": np.float32,
-    #                                                       "x": np.float32,
-    #                                                       "y": np.float32})
-    #
-    #         pd_number = pd.read_csv(number_dictionary, names=["name", "label"])
-    #         number_dict = pd.Series(pd_number.label.values, index=pd_number.name).to_dict()
-    #
-    #         configs = []
-    #         for tp in range(1, max_time + 1):
-    #             configs.append((embryo_name, number_dict, pd_lineage, tp, raw_size, out_size, out_res,
-    #                             xy_res / z_res, target_folder))
-    #         self.flag = True
-    #         for idx, _ in enumerate(tqdm(self.mpPool.imap_unordered(save_nuc_seg, configs), total=len(configs),
-    #                                      desc="3/3 Construct nucleus location of {}".format(embryo_name))):
-    #             process.emit('3/3 Constructing nucleus location', idx, max_time)
-    #             if not self.flag:
-    #                 self.mpPool.close()
-    #                 return 0
-    #         shutil.copy(lineage_file, os.path.join(stack_folder, embryo_name))
-    # return 1
+        origin_files2 = glob.glob(os.path.join(self.raw_folder, self.embryo_name, "tif", "*.tif"))
+        origin_files2.sort()
+        target_folder2 = os.path.join(self.stack_folder, self.embryo_name, "RawNuc")
+
+        if not os.path.isdir(target_folder1):
+            os.makedirs(target_folder1)
+
+        with ThreadPoolExecutor(cpu_count() + 1) as t:
+            for tp in range(1, self.max_time + 1):
+                self.mutex.lock()
+                if self.isPause:
+                    self.cond.wait(self.mutex)
+                if self.isCancel:
+                    break
+                configs1 = (
+                origin_files1, target_folder1, self.embryo_name, tp, self.out_size, self.num_slice, self.out_res)
+                configs2 = (
+                origin_files2, target_folder2, self.embryo_name, tp, self.out_size, self.num_slice, self.out_res)
+                t.submit(stack_memb_slices, configs1)
+                self.preprocessbarSignal.emit(tp, self.max_time * 2)
+                t.submit(stack_nuc_slices, configs2)
+                self.preprocessbarSignal.emit(tp + 1, self.max_time * 2)
+                self.sleep(1)
+                self.mutex.unlock()
 
 
 if __name__ == '__main__':
