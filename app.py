@@ -163,17 +163,16 @@ class App(QMainWindow):
         :return:
         """
         if self.functionbar.currentIndex() == 1: #当按钮点到segmentation
+            pass
             if self.preprocess.projectFolderEdit.text():
-                self.segmentation.projectFolderEdit.setText(self.preprocess.projectFolderEdit.text())
-                self.segmentation.embryoNamesBtn.clear()
-                if os.path.isdir(os.path.join(self.segmentation.projectFolderEdit.text(), "RawStack")):
-                    listdir = [x for x in os.listdir(os.path.join(self.segmentation.projectFolderEdit.text(), "RawStack")) if not x.startswith(".")]
+                self.segmentation.membsegment.projectFolderEdit.setText(self.preprocess.projectFolderEdit.text())
+                self.segmentation.membsegment.embryoNameBtn.clear()
+                if os.path.isdir(os.path.join(self.preprocess.projectFolderEdit.text(), "RawStack")):
+                    listdir = [x for x in os.listdir(os.path.join(self.preprocess.projectFolderEdit.text(), "RawStack")) if not x.startswith(".")]
                     listdir.sort()
-                    self.segmentation.embryoNamesBtn.addItems(listdir)
+                    self.segmentation.membsegment.embryoNameBtn.addItems(listdir)
                 else:
-                    os.makedirs(os.path.join(self.segmentation.projectFolderEdit.text(), "RawStack"))
-            if self.preprocess.maxTimeEdit.text():
-                self.segmentation.maxTimeEdit.setText(self.preprocess.maxTimeEdit.text())
+                    os.makedirs(os.path.join(self.preprocess.projectFolderEdit.text(), "RawStack"))
 
 
         if self.functionbar.currentIndex() == 2: #当按钮点到analysis

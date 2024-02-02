@@ -148,7 +148,7 @@ class Preprocess(QWidget):
             self.textEdit.clear()
             self.projectFolderEdit.setText(dirName)
         except Exception as e:
-            self.textEdit.append(traceback.format_exc())
+            self.textEdit.setText(traceback.format_exc())
             QMessageBox.warning(self, 'Warning!', 'Please Choose Right Folder!')
 
     def Autofillblank(self, embryo_name):

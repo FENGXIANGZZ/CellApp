@@ -1,105 +1,42 @@
 import sys
 from PyQt5.QtWidgets import (QWidget, QLabel, QLineEdit,
                              QTextEdit, QGridLayout, QApplication, QPushButton, QFileDialog, QMessageBox,
-                             QComboBox, QVBoxLayout, QProgressBar, QHBoxLayout)
+                             QComboBox, QVBoxLayout, QProgressBar, QHBoxLayout, QTabWidget)
 from PyQt5.QtCore import Qt, pyqtSignal, QThread
+from membrane_seg import Memb_Segmentation
+from nucleus_seg import Nucleus_Segmentation
+from cell_seg import Cell_Segmentation
+
 
 class Segmentation(QWidget):
 
     def __init__(self):
         super().__init__()
 
-        self.mainlayout = QVBoxLayout()  # 组件的整体布局是垂直布局,第一层是一个栅格放参数,第二层是个水平布局放进度条, 最下层是一个反馈信息栏
+        self.mainlayout = QGridLayout()
 
-        self.initUI()  # 设置参数相关的各种组件位置
+        self.subfunctionbar = QTabWidget()
+        self.subfunctionbar.setLayoutDirection(Qt.LeftToRight)
+        self.subfunctionbar.setTabBarAutoHide(False)
+        self.membsegment = Memb_Segmentation()
+        self.nucsegment = Nucleus_Segmentation()
+        self.cellsegment = Cell_Segmentation()
+        self.subfunctionbar.addTab(self.membsegment, "Membrane")
+        self.subfunctionbar.addTab(self.nucsegment, "Nucleus")
+        self.subfunctionbar.addTab(self.cellsegment, "Cell")
+        self.subfunctionbar.setCurrentIndex(0)
+        self.subfunctionbar.currentChanged.connect(self.updateBlankInfo)
 
-        self.middlelayout = QHBoxLayout()
-        self.runsegmentBtn = QPushButton("Run Segmentation")
-        self.runsegmentBtn.clicked.connect(self.runSegmentation)
-        self.stopsegmentBtn = QPushButton("Stop Segmentation")
-        self.stopsegmentBtn.clicked.connect(self.stopSegmentation)
-        self.segmentBar = QProgressBar()
-        self.middlelayout.addWidget(self.runsegmentBtn)
-        self.middlelayout.addWidget(self.stopsegmentBtn)
-        self.middlelayout.addWidget(self.segmentBar)
-        self.mainlayout.addStretch(1)
-        self.mainlayout.addLayout(self.middlelayout)
-
-        self.textEdit = QTextEdit()  # 初始化反馈信息栏
-        self.textEdit.setFocusPolicy(Qt.NoFocus)  # 将反馈信息栏设置为无法主动编辑
-        self.mainlayout.addStretch(1)  # 将反馈信息栏压到垂直布局的底层
-        self.mainlayout.addWidget(self.textEdit)  # 将反馈信息栏添加到整体布局中
-
-        self.setLayout(self.mainlayout)  # 将Preprocess这个分组件应用上设置好的整体布局
+        self.mainlayout.addWidget(self.subfunctionbar, 1, 0, 1, 1)
+        self.setLayout(self.mainlayout)
         self.setGeometry(300, 300, 450, 500)
         self.show()
 
-
-    def initUI(self):
-        # 栅格布局第一列是参数名称
-        projectFolder = QLabel('Project Folder')
-        embryoNames = QLabel('Embryo Names')
-        maxTime = QLabel('Max Time')
-        batchSize = QLabel('Batch Size')
-        lineageFile = QLabel('Lineage File')
-        modelFile = QLabel('Model File')
-        # 栅格布局第二列是参数输入框
-        self.projectFolderEdit = QLineEdit()
-        self.maxTimeEdit = QLineEdit()
-        self.batchSizeEdit = QLineEdit()
-        self.modelFileEdit = QLineEdit()
-        # 栅格布局第三列是参数选择按钮
-        projectFolderBtn = QPushButton("Select")
-        projectFolderBtn.clicked.connect(self.chooseProjectFolder)
-        self.embryoNamesBtn = QComboBox()
-        self.lineageFileBtn = QComboBox()
-        modelFileBtn = QPushButton("Select")
-        modelFileBtn.clicked.connect(self.chooseModelFile)
-
-        grid = QGridLayout()
-        grid.setSpacing(30)
-
-        grid.addWidget(projectFolder, 1, 0)
-        grid.addWidget(self.projectFolderEdit, 1, 1)
-        grid.addWidget(projectFolderBtn, 1, 2)
-
-        grid.addWidget(embryoNames, 2, 0)
-        grid.addWidget(self.embryoNamesBtn, 2, 1)
-
-        grid.addWidget(modelFile, 3, 0)
-        grid.addWidget(self.modelFileEdit, 3, 1)
-        grid.addWidget(modelFileBtn, 3, 2)
-
-        grid.addWidget(lineageFile, 4, 0)
-        grid.addWidget(self.lineageFileBtn, 4, 1)
-
-        grid.addWidget(maxTime, 5, 0)
-        grid.addWidget(self.maxTimeEdit, 5, 1)
-
-        grid.addWidget(batchSize, 6, 0)
-        grid.addWidget(self.batchSizeEdit, 6, 1)
-
-
-
-
-
-        self.mainlayout.addLayout(grid)
-
-    def chooseProjectFolder(self):
-        pass
-
-    def chooseModelFile(self):
-        pass
-
-    def runSegmentation(self):
-        pass
-
-    def stopSegmentation(self):
+    def updateBlankInfo(self):
         pass
 
 
 if __name__ == '__main__':
-
     app = QApplication(sys.argv)
     ex = Segmentation()
     sys.exit(app.exec_())
