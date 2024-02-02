@@ -400,6 +400,9 @@ class PreprocessThread(QThread):
         if not os.path.isdir(target_folder1):
             os.makedirs(target_folder1)
 
+        if not os.path.isdir(target_folder2):
+            os.makedirs(target_folder2)
+
         with ThreadPoolExecutor(cpu_count() + 1) as t:
             for tp in range(1, self.max_time + 1):
                 self.mutex.lock()

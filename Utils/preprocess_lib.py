@@ -28,7 +28,15 @@ def stack_nuc_slices2(para):
         bottom_img = np.concatenate((img, bottom_img), axis=0)
 
     img_stack = np.transpose(bottom_img, axes=(1, 2, 0))
-    return img_stack
+    img_stack = resize(image=img_stack, output_shape=out_size, preserve_range=True, order=1).astype(np.uint16)
+    nib_stack = nib.Nifti1Image(img_stack, np.eye(4))
+    nib_stack.set_qform(np.eye(4), code='aligned')
+    nib_stack.header["pixdim"] = [1.0, res[0], res[1], res[2], 0., 0., 0., 0.]
+    nib_stack.header.set_xyzt_units(xyz=3, t=8)
+    nib_stack.header["xyzt_units"] = 10
+
+    return nib_stack
+
 
 def stack_nuc_slices(para):
     """
@@ -48,16 +56,18 @@ def stack_nuc_slices(para):
     img_stack = np.transpose(np.stack(out_stack), axes=(1, 2, 0))
     img_stack = resize(image=img_stack, output_shape=out_size, preserve_range=True, order=1).astype(np.uint16)
     nib_stack = nib.Nifti1Image(img_stack, np.eye(4))
-    # nib_stack.header.set_xyzt_units(xyz=3, t=8)
-    # nib_stack.header["pixdim"] = [1.0, res[0], res[1], res[2], 0., 0., 0., 0.]
+    nib_stack.set_qform(np.eye(4), code='aligned')
+    nib_stack.header["pixdim"] = [1.0, res[0], res[1], res[2], 0., 0., 0., 0.]
+    nib_stack.header["xyzt_units"] = 11
     nib.save(nib_stack, os.path.join(save_folder, save_file_name))
+
 
 def stack_memb_slices(para):
     [origin_files, save_folder, embryo_name, tp, out_size, num_slice, res] = para
 
     out_stack = []
     save_file_name = "{}_{}_rawMemb.nii.gz".format(embryo_name, str(tp).zfill(3))
-    for idx in range((tp-1)*num_slice, tp*num_slice):
+    for idx in range((tp - 1) * num_slice, tp * num_slice):
         raw_file_name = origin_files[idx]
 
         img = np.asanyarray(Image.open(raw_file_name))
@@ -65,28 +75,23 @@ def stack_memb_slices(para):
     img_stack = np.transpose(np.stack(out_stack), axes=(1, 2, 0))
     img_stack = resize(image=img_stack, output_shape=out_size, preserve_range=True, order=1).astype(np.uint8)
     nib_stack = nib.Nifti1Image(img_stack, np.eye(4))
-    # nib_stack.header.set_xyzt_units(xyz=3, t=8)
-    # nib_stack.header["pixdim"] = [1.0, res[0], res[1], res[2], 0., 0., 0., 0.]
+    nib_stack.set_qform(np.eye(4), code='aligned')
+    nib_stack.header["pixdim"] = [1.0, res[0], res[1], res[2], 0., 0., 0., 0.]
+    nib_stack.header["xyzt_units"] = 11
     nib.save(nib_stack, os.path.join(save_folder, save_file_name))
+    """
+    pixdim体素维度：每个体素维度信息都保存在pixdim中，各自对应dim，
+    但pixdim[0]有特殊意义，其值只能是 - 1或1。
+    pixdim[1]对应x轴，pixdim[2]对应y轴, pixdim[3]对应z轴
+    sform的前三个维度将在srow_x, srow_y, srow_z字段中指定。
+    """
+
 
 if __name__ == '__main__':
     # origin_files =  glob.glob(os.path.join("C:\CellAltas\MembRaw\MembRaw", "181210plc1p1", "tif", "*.tif"))
     origin_files2 = glob.glob(os.path.join("C:\CellAltas\MembRaw\MembRaw", "181210plc1p1", "tifR", "*.tif"))
-    raw_file_name = origin_files2[1359]
-    # list1 = []
-    # list2 = []
-    # for f in origin_files:
-    #     list1.append(f[-28:])
-    #
-    # for f in origin_files2:
-    #     list2.append(f[-28:])
-    #
-    # for f in list1:
-    #     if f not in list2:
-    #         print(f)
-    #
-    # print(len(list1))
-    # print(len(list2))
-
-
-
+    para = (origin_files2, "./", "test", 1, [512, 712, 28], 68, [0.999, 0.99, 0.99])
+    test = stack_nuc_slices2(para)
+    print(test.get_sform(coded=True))
+    print(test.get_qform(coded=True))
+    print(test.header)
