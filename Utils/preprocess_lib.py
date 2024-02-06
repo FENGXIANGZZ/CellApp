@@ -11,29 +11,33 @@ import pandas as pd
 from tqdm import tqdm
 import multiprocessing as mp
 from skimage.transform import resize
+import traceback
 
 
 def stack_nuc_slices2(para):
-    [origin_files, save_folder, embryo_name, tp, out_size, num_slice, res] = para
+    try:
+        [origin_files, save_folder, embryo_name, tp, out_size, num_slice, res] = para
 
-    first_img_idx = (tp - 1) * num_slice
-    bottom_img = np.asanyarray(Image.open(origin_files[first_img_idx]))
-    bottom_img = np.expand_dims(bottom_img, axis=0)
-    save_file_name = "{}_{}_rawNuc.nii.gz".format(embryo_name, str(tp).zfill(3))
+        first_img_idx = (tp - 1) * num_slice
+        bottom_img = np.asanyarray(Image.open(origin_files[first_img_idx]))
+        bottom_img = np.expand_dims(bottom_img, axis=0)
+        save_file_name = "{}_{}_rawNuc.nii.gz".format(embryo_name, str(tp).zfill(3))
 
-    for idx in range(first_img_idx + 1, tp * num_slice):
-        raw_file_name = origin_files[idx]
-        img = np.asanyarray(Image.open(raw_file_name))
-        img = np.expand_dims(img, axis=0)
-        bottom_img = np.concatenate((img, bottom_img), axis=0)
+        for idx in range(first_img_idx + 1, tp * num_slice):
+            raw_file_name = origin_files[idx]
+            img = np.asanyarray(Image.open(raw_file_name))
+            img = np.expand_dims(img, axis=0)
+            bottom_img = np.concatenate((img, bottom_img), axis=0)
 
-    img_stack = np.transpose(bottom_img, axes=(1, 2, 0))
-    img_stack = resize(image=img_stack, output_shape=out_size, preserve_range=True, order=1).astype(np.uint16)
-    nib_stack = nib.Nifti1Image(img_stack, np.eye(4))
-    nib_stack.set_qform(np.eye(4), code='aligned')
-    nib_stack.header["pixdim"] = [1.0, res[0], res[1], res[2], 0., 0., 0., 0.]
-    nib_stack.header.set_xyzt_units(xyz=3, t=8)
-    nib_stack.header["xyzt_units"] = 10
+        img_stack = np.transpose(bottom_img, axes=(1, 2, 0))
+        img_stack = resize(image=img_stack, output_shape=out_size, preserve_range=True, order=1).astype(np.uint16)
+        nib_stack = nib.Nifti1Image(img_stack, np.eye(4))
+        nib_stack.set_qform(np.eye(4), code='aligned')
+        nib_stack.header["pixdim"] = [1.0, res[0], res[1], res[2], 0., 0., 0., 0.]
+        nib_stack.header.set_xyzt_units(xyz=3, t=8)
+        nib_stack.header["xyzt_units"] = 10
+    except:
+        pass
 
     return nib_stack
 
@@ -44,22 +48,25 @@ def stack_nuc_slices(para):
     :param para:
     :return:
     """
-    [origin_files, save_folder, embryo_name, tp, out_size, num_slice, res] = para
+    try:
+        [origin_files, save_folder, embryo_name, tp, out_size, num_slice, res] = para
 
-    out_stack = []
-    save_file_name = "{}_{}_rawNuc.nii.gz".format(embryo_name, str(tp).zfill(3))
-    for idx in range((tp - 1) * num_slice, tp * num_slice):
-        raw_file_name = origin_files[idx]
-        img = np.asanyarray(Image.open(raw_file_name))
-        out_stack.insert(0, img)
+        out_stack = []
+        save_file_name = "{}_{}_rawNuc.nii.gz".format(embryo_name, str(tp).zfill(3))
+        for idx in range((tp - 1) * num_slice, tp * num_slice):
+            raw_file_name = origin_files[idx]
+            img = np.asanyarray(Image.open(raw_file_name))
+            out_stack.insert(0, img)
 
-    img_stack = np.transpose(np.stack(out_stack), axes=(1, 2, 0))
-    img_stack = resize(image=img_stack, output_shape=out_size, preserve_range=True, order=1).astype(np.uint16)
-    nib_stack = nib.Nifti1Image(img_stack, np.eye(4))
-    nib_stack.set_qform(np.eye(4), code='aligned')
-    nib_stack.header["pixdim"] = [1.0, res[0], res[1], res[2], 0., 0., 0., 0.]
-    nib_stack.header["xyzt_units"] = 11
-    nib.save(nib_stack, os.path.join(save_folder, save_file_name))
+        img_stack = np.transpose(np.stack(out_stack), axes=(1, 2, 0))
+        img_stack = resize(image=img_stack, output_shape=out_size, preserve_range=True, order=1).astype(np.uint16)
+        nib_stack = nib.Nifti1Image(img_stack, np.eye(4))
+        nib_stack.set_qform(np.eye(4), code='aligned')
+        nib_stack.header["pixdim"] = [1.0, res[0], res[1], res[2], 0., 0., 0., 0.]
+        nib_stack.header["xyzt_units"] = 11
+        nib.save(nib_stack, os.path.join(save_folder, save_file_name))
+    except Exception as e:
+        return "Threadpool return exception: {}".format(e)
 
 
 def stack_memb_slices(para):
@@ -85,6 +92,7 @@ def stack_memb_slices(para):
     pixdim[1]对应x轴，pixdim[2]对应y轴, pixdim[3]对应z轴
     sform的前三个维度将在srow_x, srow_y, srow_z字段中指定。
     """
+
 
 
 if __name__ == '__main__':

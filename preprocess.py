@@ -190,20 +190,6 @@ class Preprocess(QWidget):
 
         if config:
             try:
-                if config["preprocess_object"] == "Membrane":
-                    raw_memb_files = glob.glob(
-                        os.path.join(config["raw_folder"], config["embryo_name"], "tifR", "*.tif"))
-                    assert config['num_slice'] * config["max_time"] == len(raw_memb_files)
-                elif config["preprocess_object"] == "Nucleus":
-                    raw_nuc_files = glob.glob(os.path.join(config["raw_folder"], config["embryo_name"], "tif", "*.tif"))
-                    assert config['num_slice'] * config["max_time"] == len(raw_nuc_files)
-                else:
-                    raw_memb_files = glob.glob(
-                        os.path.join(config["raw_folder"], config["embryo_name"], "tifR", "*.tif"))
-                    raw_nuc_files = glob.glob(os.path.join(config["raw_folder"], config["embryo_name"], "tif", "*.tif"))
-                    assert len(raw_memb_files) == len(raw_nuc_files)
-                    assert config['num_slice'] * config["max_time"] == len(raw_memb_files)
-
                 self.textEdit.append('Running Preprocess!')
                 for key, value in config.items():
                     self.textEdit.append(f"The {key} is: {value}")
@@ -217,6 +203,7 @@ class Preprocess(QWidget):
                 self.pthread = PreprocessThread(config)
 
                 self.pthread.preprocessbarSignal.connect(self.showpreprocessbar)
+                self.pthread.preprocessexcSignal.connect(self.preprocessexc)
 
                 self.pthread.start()
             except:
@@ -230,8 +217,8 @@ class Preprocess(QWidget):
             self.resumepreprocessBtn.setEnabled(False)
             self.cancelpreprocessBtn.setEnabled(False)
             self.pausepreprocessBtn.setEnabled(False)
-            self.preprocessBar.reset()
             self.textEdit.setText("Preprocess Cancel!")
+            self.preprocessBar.setValue(0)
             QMessageBox.information(self, 'Tips', 'Preprocess has been terminated.')
         except Exception:
             self.textEdit.append(traceback.format_exc())
@@ -272,6 +259,19 @@ class Preprocess(QWidget):
     def showpreprocessbar(self, current, total):
         self.preprocessBar.setValue(current * 100 / total)
 
+    def preprocessexc(self, text):
+        try:
+            self.pthread.cancel()
+            self.runpreprocessBtn.setEnabled(True)
+            self.resumepreprocessBtn.setEnabled(False)
+            self.cancelpreprocessBtn.setEnabled(False)
+            self.pausepreprocessBtn.setEnabled(False)
+            self.textEdit.setText(text)
+            self.preprocessBar.setValue(0)
+            QMessageBox.warning(self, 'Error!', 'Errors with Preprocess!!.')
+        except:
+            QMessageBox.warning(self, 'Warning!', 'Preprocess cancel fail!.')
+
 
 """QT 中 QObject 作QT中类的最终父类，具有自定义信号与槽的能力，只要继承自这个类的类，也一样拥有自定义信号和槽的能力。
 QT 中定义信号与槽是十分有用的，QT 下多线程类QThread 是继承自 QObject，同样具有有自定义信号和槽的能力"""
@@ -279,6 +279,7 @@ QT 中定义信号与槽是十分有用的，QT 下多线程类QThread 是继承
 
 class PreprocessThread(QThread):
     preprocessbarSignal = pyqtSignal(int, int)
+    preprocessexcSignal = pyqtSignal(str)
 
     def __init__(self, config={}):
         super().__init__()
@@ -351,8 +352,10 @@ class PreprocessThread(QThread):
                     break
                 configs = (
                     origin_files, target_folder, self.embryo_name, tp, self.out_size, self.num_slice, self.out_res)
-                t.submit(stack_nuc_slices, configs)
+                exception = t.submit(stack_nuc_slices, configs).result()
                 self.preprocessbarSignal.emit(tp, self.max_time)
+                if exception:
+                    self.preprocessexcSignal.emit(exception)
                 self.sleep(1)
                 self.mutex.unlock()
 
@@ -378,8 +381,10 @@ class PreprocessThread(QThread):
                     break
                 configs = (
                     origin_files, target_folder, self.embryo_name, tp, self.out_size, self.num_slice, self.out_res)
-                t.submit(stack_memb_slices, configs)
+                exception = t.submit(stack_memb_slices, configs).result()
                 self.preprocessbarSignal.emit(tp, self.max_time)
+                if exception:
+                    self.preprocessexcSignal.emit(exception)
                 self.sleep(1)
                 self.mutex.unlock()
 
@@ -414,10 +419,14 @@ class PreprocessThread(QThread):
                     origin_files1, target_folder1, self.embryo_name, tp, self.out_size, self.num_slice, self.out_res)
                 configs2 = (
                     origin_files2, target_folder2, self.embryo_name, tp, self.out_size, self.num_slice, self.out_res)
-                t.submit(stack_memb_slices, configs1)
+                exception1 = t.submit(stack_memb_slices, configs1).result()
                 self.preprocessbarSignal.emit(2 * tp - 1, self.max_time * 2)
-                t.submit(stack_nuc_slices, configs2)
+                exception2 = t.submit(stack_nuc_slices, configs2).result()
                 self.preprocessbarSignal.emit(2 * tp, self.max_time * 2)
+                if exception1:
+                    self.preprocessexcSignal.emit(exception1)
+                elif exception2:
+                    self.preprocessexcSignal.emit(exception2)
                 self.sleep(1)
                 self.mutex.unlock()
 
