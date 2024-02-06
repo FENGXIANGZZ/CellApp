@@ -208,7 +208,7 @@ class Preprocess(QWidget):
                 self.pthread.start()
             except:
                 self.textEdit.append(traceback.format_exc())
-                QMessageBox.warning(self, 'Error!', 'The number of picture is incorrect!')
+                QMessageBox.warning(self, 'Error!', 'Can not start Preprocess!')
 
     def cancelPreprocess(self):
         try:

@@ -98,7 +98,7 @@ class App(QMainWindow):
         self.setCentralWidget(mainwidget)  # 将主组件放入主窗口
         self.resize(600, 720)  # 设置窗口大小
         self.setWindowTitle("CShaper")  # 设置窗口标题
-        self.setWindowIcon(QIcon("CShaperLogo.png"))  # 设置窗口小图标
+        self.setWindowIcon(QIcon("./static/img/CShaperLogo.png"))  # 设置窗口小图标
         self.show()  # 展示主窗口
 
     def closeEvent(self, event):

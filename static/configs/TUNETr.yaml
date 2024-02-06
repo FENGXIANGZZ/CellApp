@@ -1,0 +1,17 @@
+net: SwinUNETR #  Network used for training.
+net_params: # network parameters - import
+  img_size: (128,128,128)
+  in_channels: 2 # MRI have 4, now we are using raw_memb, raw_nuc, waiting pixel_to_nuc_dis
+  feature_size: 48
+  out_channels: 1
+
+
+dataset_name: MembsegDataset
+trained_model: ./static/ckpts/sTUNETr_1_20240103/model_epoch_1000_edt6_sTUNETr.pth
+seed: 1024
+
+transforms: # for testing
+  Compose([
+    Resize((256, 384, 224)),
+    NumpyType((np.float32, np.float32, np.float32, np.float32))
+    ])

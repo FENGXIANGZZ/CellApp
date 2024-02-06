@@ -5,7 +5,11 @@ from PyQt5.QtWidgets import (QWidget, QLabel, QLineEdit,
 from PyQt5.QtCore import Qt, pyqtSignal, QThread
 import traceback
 import os
-
+from Utils.parser import read_yaml_to_dict
+from Utils import dataset
+from torch.utils.data import DataLoader
+import networks
+import torch
 
 class Memb_Segmentation(QWidget):
 
@@ -54,21 +58,22 @@ class Memb_Segmentation(QWidget):
         projectFolder = QLabel('Project Folder')
         embryoName = QLabel('Embryo Name')
         modelName = QLabel('Model Name')
-        modelFile = QLabel('Model File')
         GPU = QLabel("GPU")
+        Nuc = QLabel("Nucleus")
         # 栅格布局第二列是参数输入框
         self.projectFolderEdit = QLineEdit()
-        self.modelNameEdit = QLineEdit()
-        self.modelFileEdit = QLineEdit()
+        self.modelNameEdit = QComboBox()
+        self.modelNameEdit.addItems(["TUNETr", "UNETR", "SwinUNETR", "VNet", "UNet", "DMFNet"])
         self.GPU = QCheckBox('Whether to use GPU')
         self.GPU.stateChanged.connect(self.GPUchange)
-        self.GPUcheck = None
+        self.GPUcheck = False
+        self.Nuc = QCheckBox('Whether to use raw Nucleus to segment')
+        self.Nuc.stateChanged.connect(self.Nucchange)
+        self.Nucinput = False
         # 栅格布局第三列是参数选择按钮
         projectFolderBtn = QPushButton("Select")
         projectFolderBtn.clicked.connect(self.chooseProjectFolder)
         self.embryoNameBtn = QComboBox()
-        modelFileBtn = QPushButton("Select")
-        modelFileBtn.clicked.connect(self.chooseModelFile)
 
         grid = QGridLayout()
         grid.setSpacing(30)
@@ -80,15 +85,14 @@ class Memb_Segmentation(QWidget):
         grid.addWidget(embryoName, 2, 0)
         grid.addWidget(self.embryoNameBtn, 2, 1)
 
-        grid.addWidget(modelFile, 3, 0)
-        grid.addWidget(self.modelFileEdit, 3, 1)
-        grid.addWidget(modelFileBtn, 3, 2)
+        grid.addWidget(modelName, 3, 0)
+        grid.addWidget(self.modelNameEdit, 3, 1)
 
-        grid.addWidget(modelName, 4, 0)
-        grid.addWidget(self.modelNameEdit, 4, 1)
+        grid.addWidget(GPU, 4, 0)
+        grid.addWidget(self.GPU, 4, 1)
 
-        grid.addWidget(GPU, 5, 0)
-        grid.addWidget(self.GPU, 5, 1)
+        grid.addWidget(Nuc, 5, 0)
+        grid.addWidget(self.Nuc, 5, 1)
 
         self.mainlayout.addLayout(grid)
 
@@ -99,25 +103,51 @@ class Memb_Segmentation(QWidget):
             self.embryoNameBtn.clear()
             self.projectFolderEdit.setText(dirName)
             if dirName:
-                listdir = [x for x in os.listdir(dirName) if not x.startswith(".")]
+                listdir = [x for x in os.listdir(os.path.join(dirName, "RawStack")) if not x.startswith(".")]
                 listdir.sort()
                 self.embryoNameBtn.addItems(listdir)
         except Exception as e:
             self.textEdit.setText(traceback.format_exc())
             QMessageBox.warning(self, 'Warning!', 'Please Choose Right Folder!')
 
-    def chooseModelFile(self):
-        fileName, fileType = QFileDialog.getOpenFileName(self, 'Choose Model File',
-                                                         self.projectFolderEdit.text(), "(*.pth)")
-        try:
-            self.textEdit.setText('')
-            self.modelFileEdit.setText(fileName)
-        except Exception as e:
-            self.textEdit.append(traceback.format_exc())
-            QMessageBox.warning(self, 'Warning!', 'Please Choose Right File!')
-
     def runSegmentation(self):
-        pass
+        para = {}
+        try:
+            para = read_yaml_to_dict(os.path.join("./static/configs", self.modelNameEdit.currentText() + ".yaml"))
+            Network = getattr(networks, para.get("net"))
+            model = Network(**para.get("net_params"))
+            Dataset = getattr(dataset, para.get("dataset_name"))
+            memb_dataset = Dataset(
+                root=self.projectFolderEdit.text(),
+                embryoname=self.embryoNameBtn.currentText(),
+                is_input_nuc=self.Nucinput,
+                transforms=para.get("transforms")
+            )
+            memb_loader = DataLoader(
+                dataset=memb_dataset,
+                batch_size=1,
+                shuffle=False,
+            )
+            if self.GPUcheck:
+                assert torch.cuda.is_available()
+                device = torch.device("cuda:0")
+                model = model.to(device)
+            else:
+                device = torch.device("cpu")
+                model = model.to(device)
+        except:
+            para.clear()
+            self.textEdit.setText(traceback.format_exc())
+            QMessageBox.warning(self, 'Error!', 'Initialization Failure!')
+
+        if para:
+            try:
+                self.textEdit.clear()
+                self.textEdit.append("Running Segmentation!")
+
+            except:
+                self.textEdit.append(traceback.format_exc())
+                QMessageBox.warning(self, 'Error!', 'Can not start Segmentation!')
 
     def cancelSegmentation(self):
         pass
@@ -138,6 +168,15 @@ class Memb_Segmentation(QWidget):
         else:
             self.GPU.setText("Don't use GPU")
             self.GPUcheck = False
+
+    def Nucchange(self, state):
+        if state == Qt.Checked:
+            self.Nuc.setText("Use raw Nucleus infomation")
+            self.Nucinput = True
+        else:
+            self.Nuc.setText("Don't use Nucleus infomation")
+            self.Nucinput = False
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

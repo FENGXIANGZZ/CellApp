@@ -70,22 +70,25 @@ def stack_nuc_slices(para):
 
 
 def stack_memb_slices(para):
-    [origin_files, save_folder, embryo_name, tp, out_size, num_slice, res] = para
+    try:
+        [origin_files, save_folder, embryo_name, tp, out_size, num_slice, res] = para
 
-    out_stack = []
-    save_file_name = "{}_{}_rawMemb.nii.gz".format(embryo_name, str(tp).zfill(3))
-    for idx in range((tp - 1) * num_slice, tp * num_slice):
-        raw_file_name = origin_files[idx]
+        out_stack = []
+        save_file_name = "{}_{}_rawMemb.nii.gz".format(embryo_name, str(tp).zfill(3))
+        for idx in range((tp - 1) * num_slice, tp * num_slice):
+            raw_file_name = origin_files[idx]
 
-        img = np.asanyarray(Image.open(raw_file_name))
-        out_stack.insert(0, img)
-    img_stack = np.transpose(np.stack(out_stack), axes=(1, 2, 0))
-    img_stack = resize(image=img_stack, output_shape=out_size, preserve_range=True, order=1).astype(np.uint8)
-    nib_stack = nib.Nifti1Image(img_stack, np.eye(4))
-    nib_stack.set_qform(np.eye(4), code='aligned')
-    nib_stack.header["pixdim"] = [1.0, res[0], res[1], res[2], 0., 0., 0., 0.]
-    nib_stack.header["xyzt_units"] = 11
-    nib.save(nib_stack, os.path.join(save_folder, save_file_name))
+            img = np.asanyarray(Image.open(raw_file_name))
+            out_stack.insert(0, img)
+        img_stack = np.transpose(np.stack(out_stack), axes=(1, 2, 0))
+        img_stack = resize(image=img_stack, output_shape=out_size, preserve_range=True, order=1).astype(np.uint8)
+        nib_stack = nib.Nifti1Image(img_stack, np.eye(4))
+        nib_stack.set_qform(np.eye(4), code='aligned')
+        nib_stack.header["pixdim"] = [1.0, res[0], res[1], res[2], 0., 0., 0., 0.]
+        nib_stack.header["xyzt_units"] = 11
+        nib.save(nib_stack, os.path.join(save_folder, save_file_name))
+    except Exception as e:
+        return "Threadpool return exception: {}".format(e)
     """
     pixdim体素维度：每个体素维度信息都保存在pixdim中，各自对应dim，
     但pixdim[0]有特殊意义，其值只能是 - 1或1。
