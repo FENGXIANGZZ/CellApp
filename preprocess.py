@@ -60,8 +60,9 @@ class Preprocess(QWidget):
         # 栅格布局第一列是参数名称
         rawFolder = QLabel('Raw Folder')
         embryoName = QLabel('Embryo Name')
-        xyResolu = QLabel('X-Y Resolution')
-        zResolu = QLabel('Z Resolution')
+        xLength = QLabel('X Size')
+        yLength = QLabel('Y Size')
+        zLength = QLabel('Z Size')
         reduceRation = QLabel('Reduce Ratio')
         sliceNum = QLabel('Slice Num')
         maxTime = QLabel('Max Time')
@@ -69,8 +70,9 @@ class Preprocess(QWidget):
         preprocessObject = QLabel('Preprocess Object')
         # 栅格布局第二列是参数输入框
         self.rawFolderEdit = QLineEdit()
-        self.xyResoluEdit = QLineEdit()
-        self.zResoluEdit = QLineEdit()
+        self.xLengthEdit = QLineEdit()
+        self.yLengthEdit = QLineEdit()
+        self.zLengthEdit = QLineEdit()
         self.reduceRationEdit = QLineEdit()
         self.sliceNumEdit = QLineEdit()
         self.maxTimeEdit = QLineEdit()
@@ -106,20 +108,23 @@ class Preprocess(QWidget):
         grid.addWidget(preprocessObject, 4, 0)
         grid.addWidget(self.preprocessObjectBtn, 4, 1)
 
-        grid.addWidget(xyResolu, 5, 0)
-        grid.addWidget(self.xyResoluEdit, 5, 1)
+        grid.addWidget(xLength, 5, 0)
+        grid.addWidget(self.xLengthEdit, 5, 1)
+        
+        grid.addWidget(yLength, 6, 0)
+        grid.addWidget(self.yLengthEdit, 6, 1)
 
-        grid.addWidget(zResolu, 6, 0)
-        grid.addWidget(self.zResoluEdit, 6, 1)
+        grid.addWidget(zLength, 7, 0)
+        grid.addWidget(self.zLengthEdit, 7, 1)
 
-        grid.addWidget(reduceRation, 7, 0)
-        grid.addWidget(self.reduceRationEdit, 7, 1)
+        grid.addWidget(reduceRation, 8, 0)
+        grid.addWidget(self.reduceRationEdit, 8, 1)
 
-        grid.addWidget(sliceNum, 8, 0)
-        grid.addWidget(self.sliceNumEdit, 8, 1)
+        grid.addWidget(sliceNum, 9, 0)
+        grid.addWidget(self.sliceNumEdit, 9, 1)
 
-        grid.addWidget(maxTime, 9, 0)
-        grid.addWidget(self.maxTimeEdit, 9, 1)
+        grid.addWidget(maxTime, 10, 0)
+        grid.addWidget(self.maxTimeEdit, 10, 1)
 
         self.mainlayout.addLayout(grid)  # 将栅格布局添加到整体垂直布局的第一层
 
@@ -160,8 +165,9 @@ class Preprocess(QWidget):
 
             self.maxTimeEdit.setText(max_time)
             self.sliceNumEdit.setText(num_slice)
-            self.xyResoluEdit.setText("0.99")
-            self.zResoluEdit.setText("0.42")
+            self.xLengthEdit.setText("256")
+            self.yLengthEdit.setText("356")
+            self.zLengthEdit.setText("160")
             self.reduceRationEdit.setText("1.0")
         except:
             self.textEdit.setText(traceback.format_exc())
@@ -176,8 +182,9 @@ class Preprocess(QWidget):
             config['num_slice'] = int(self.sliceNumEdit.text())
             config["embryo_name"] = self.embryoNameBtn.currentText()
             config["max_time"] = int(self.maxTimeEdit.text())
-            config["xy_resolution"] = float(self.xyResoluEdit.text())
-            config["z_resolution"] = float(self.zResoluEdit.text())
+            config["x_size"] = float(self.xLengthEdit.text())
+            config["y_size"] = float(self.yLengthEdit.text())
+            config["z_size"] = float(self.zLengthEdit.text())
             config["reduce_ratio"] = float(self.reduceRationEdit.text())
             config["raw_folder"] = self.rawFolderEdit.text()
             config["project_folder"] = self.projectFolderEdit.text()
@@ -287,8 +294,9 @@ class PreprocessThread(QThread):
         self.num_slice = config["num_slice"]
         self.embryo_name = config["embryo_name"]
         self.max_time = config["max_time"]
-        self.xy_res = config["xy_resolution"]
-        self.z_res = config["z_resolution"]
+        self.x_size = config["x_size"]
+        self.y_size = config["y_size"]
+        self.z_size = config["z_size"]
         self.reduce_ratio = config["reduce_ratio"]
         self.raw_folder = config["raw_folder"]
         self.stack_folder = os.path.join(config["project_folder"], "RawStack")
@@ -296,11 +304,9 @@ class PreprocessThread(QThread):
 
         # 计算相关参数
         raw_memb_files = glob.glob(os.path.join(self.raw_folder, self.embryo_name, "tifR", "*.tif"))
-        self.raw_size = list(np.asarray(Image.open(raw_memb_files[0])).shape) + [
-            int(self.num_slice * self.z_res / self.xy_res)]
-        self.out_size = [int(i * self.reduce_ratio) for i in self.raw_size]
-        self.out_res = [res * x / y for res, x, y in
-                        zip([self.xy_res, self.xy_res, self.xy_res], self.raw_size, self.out_size)]
+        self.raw_size = list(np.asarray(Image.open(raw_memb_files[0])).shape) + [int(self.num_slice)]
+        self.out_size = [int(i * self.reduce_ratio) for i in [self.x_size, self.y_size, self.z_size]]
+        self.out_res = [x / y for x, y in zip(self.out_size, self.raw_size)]
 
         # 与线程运行有关
         self.isCancel = False
@@ -356,7 +362,6 @@ class PreprocessThread(QThread):
                 self.preprocessbarSignal.emit(tp, self.max_time)
                 if exception:
                     self.preprocessexcSignal.emit(exception)
-                self.sleep(1)
                 self.mutex.unlock()
 
     def combine_memb_slices(self):
@@ -385,7 +390,6 @@ class PreprocessThread(QThread):
                 self.preprocessbarSignal.emit(tp, self.max_time)
                 if exception:
                     self.preprocessexcSignal.emit(exception)
-                self.sleep(1)
                 self.mutex.unlock()
 
     def combine_both_slices(self):
@@ -427,7 +431,6 @@ class PreprocessThread(QThread):
                     self.preprocessexcSignal.emit(exception1)
                 elif exception2:
                     self.preprocessexcSignal.emit(exception2)
-                self.sleep(1)
                 self.mutex.unlock()
 
 

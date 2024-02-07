@@ -5,11 +5,17 @@ from PyQt5.QtWidgets import (QWidget, QLabel, QLineEdit,
 from PyQt5.QtCore import Qt, pyqtSignal, QThread
 import traceback
 import os
-from Utils.parser import read_yaml_to_dict
+from Utils.parser import read_yaml_to_dict, parse_tuple
 from Utils import dataset
 from torch.utils.data import DataLoader
 import networks
 import torch
+import random
+import numpy as np
+import ast
+from skimage.transform import resize
+import nibabel as nib
+
 
 class Memb_Segmentation(QWidget):
 
@@ -114,8 +120,19 @@ class Memb_Segmentation(QWidget):
         para = {}
         try:
             para = read_yaml_to_dict(os.path.join("./static/configs", self.modelNameEdit.currentText() + ".yaml"))
+
+            np.random.seed(para.get("seed"))
+            random.seed(para.get("seed"))
+            torch.manual_seed(para.get("seed"))
+            torch.cuda.manual_seed(para.get("seed"))
+
             Network = getattr(networks, para.get("net"))
-            model = Network(**para.get("net_params"))
+            net_params = para.get("net_params")
+            img_size = net_params.get("img_size")
+            img_size = parse_tuple(img_size)
+            net_params["img_size"] = img_size
+            model = Network(**net_params)
+
             Dataset = getattr(dataset, para.get("dataset_name"))
             memb_dataset = Dataset(
                 root=self.projectFolderEdit.text(),
@@ -128,6 +145,7 @@ class Memb_Segmentation(QWidget):
                 batch_size=1,
                 shuffle=False,
             )
+
             if self.GPUcheck:
                 assert torch.cuda.is_available()
                 device = torch.device("cuda:0")
@@ -144,6 +162,39 @@ class Memb_Segmentation(QWidget):
             try:
                 self.textEdit.clear()
                 self.textEdit.append("Running Segmentation!")
+                self.textEdit.append(f"The model name is {self.modelNameEdit.currentText()}")
+                self.textEdit.append(f"The network parameters are {para.get('net_params')}")
+                self.textEdit.append(f"The dataset name is {para.get('dataset_name')}")
+                self.textEdit.append(f"Use GPU : {self.GPUcheck}")
+                self.textEdit.append(f"Use nucleus information :{self.Nucinput}")
+
+                with torch.no_grad():
+                    model.eval()
+                    for i, data in enumerate(memb_loader):
+                        raw_memb = data[0]
+                        raw_memb_shape = data[1]
+                        embryo_name_tp = data[2][0]
+                        raw_memb_shape = (raw_memb_shape[0].item(), raw_memb_shape[1].item(), raw_memb_shape[2].item())
+                        pred_memb = model(raw_memb.to(device))
+                        pred_memb = pred_memb[0] if len(pred_memb) > 1 else pred_memb
+
+                        pred_memb = pred_memb[0, 0, :, :, :]
+                        pred_memb = pred_memb.cpu().numpy().transpose([1, 2, 0])
+                        pred_memb = resize(pred_memb,
+                                           raw_memb_shape,
+                                           mode='constant',
+                                           cval=0,
+                                           order=1,
+                                           anti_aliasing=True)
+
+                        save_path = os.path.join(self.projectFolderEdit.text(), "SegStack", self.embryoNameBtn.currentText(),
+                                                 "SegMemb", self.modelNameEdit.currentText())
+                        if not os.path.isdir(save_path):
+                            os.makedirs(save_path)
+                        save_name = os.path.join(save_path, embryo_name_tp + "_segMemb.nii.gz")
+                        nib_stack = nib.Nifti1Image((pred_memb * 256).astype(np.int16), np.eye(4))
+                        nib.save(nib_stack, save_name)
+                        break
 
             except:
                 self.textEdit.append(traceback.format_exc())

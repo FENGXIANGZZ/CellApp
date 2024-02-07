@@ -1,5 +1,6 @@
-net: SwinUNETR #  Network used for training.
-net_params: # network parameters - import
+net: TUNETr #  Network used for training.
+# network parameters - import
+net_params:
   img_size: (128,128,128)
   in_channels: 2 # MRI have 4, now we are using raw_memb, raw_nuc, waiting pixel_to_nuc_dis
   feature_size: 48
@@ -7,7 +8,7 @@ net_params: # network parameters - import
 
 
 dataset_name: MembsegDataset
-trained_model: ./static/ckpts/sTUNETr_1_20240103/model_epoch_1000_edt6_sTUNETr.pth
+trained_model: ./static/ckpts/model_epoch_1000_edt6_sTUNETr.pth
 seed: 1024
 
 transforms: # for testing

@@ -6,3 +6,4 @@ from .unet import UNet
 from .vit import ViT
 from .unetr import UNETR
 from .original_swin_unetr import SwinUNETR as OriginalSwinUNETR
+from .tunetr import TUNETr
