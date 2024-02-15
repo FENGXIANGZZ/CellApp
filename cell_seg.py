@@ -1,8 +1,16 @@
 import sys
 from PyQt5.QtWidgets import (QWidget, QLabel, QLineEdit,
                              QTextEdit, QGridLayout, QApplication, QPushButton, QFileDialog, QMessageBox,
-                             QComboBox, QVBoxLayout, QProgressBar, QHBoxLayout)
-from PyQt5.QtCore import Qt, pyqtSignal, QThread
+                             QComboBox, QVBoxLayout, QProgressBar, QHBoxLayout, QCheckBox)
+from PyQt5.QtCore import Qt, pyqtSignal, QThread, QMutex, QWaitCondition
+import traceback
+import os
+import glob
+import nibabel as nib
+from Utils.segment_lib import segmentation
+from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import cpu_count
+
 
 class Cell_Segmentation(QWidget):
 
@@ -13,15 +21,27 @@ class Cell_Segmentation(QWidget):
 
         self.initUI()  # 设置参数相关的各种组件位置
 
-        self.middlelayout = QHBoxLayout()
+        self.middlelayout = QGridLayout()
+
         self.runsegmentBtn = QPushButton("Run Segmentation")
         self.runsegmentBtn.clicked.connect(self.runSegmentation)
-        self.stopsegmentBtn = QPushButton("Stop Segmentation")
-        self.stopsegmentBtn.clicked.connect(self.stopSegmentation)
+        self.cancelsegmentBtn = QPushButton("Cancel Segmentation")
+        self.cancelsegmentBtn.setEnabled(False)
+        self.cancelsegmentBtn.clicked.connect(self.cancelSegmentation)
+        self.pausesegmentBtn = QPushButton("Pause Segmentation")
+        self.pausesegmentBtn.setEnabled(False)
+        self.pausesegmentBtn.clicked.connect(self.pauseSegmentation)
+        self.resumesegmentBtn = QPushButton("Resume Segmentation")
+        self.resumesegmentBtn.setEnabled(False)
+        self.resumesegmentBtn.clicked.connect(self.resumeSegmentation)
         self.segmentBar = QProgressBar()
-        self.middlelayout.addWidget(self.runsegmentBtn)
-        self.middlelayout.addWidget(self.stopsegmentBtn)
-        self.middlelayout.addWidget(self.segmentBar)
+        self.segmentBar.valueChanged.connect(self.completeSegmentation)
+
+        self.middlelayout.addWidget(self.runsegmentBtn, 0, 1)
+        self.middlelayout.addWidget(self.cancelsegmentBtn, 0, 2)
+        self.middlelayout.addWidget(self.pausesegmentBtn, 2, 1)
+        self.middlelayout.addWidget(self.resumesegmentBtn, 2, 2)
+        self.middlelayout.addWidget(self.segmentBar, 1, 3)
         self.mainlayout.addStretch(1)
         self.mainlayout.addLayout(self.middlelayout)
 
@@ -30,31 +50,36 @@ class Cell_Segmentation(QWidget):
         self.mainlayout.addStretch(1)  # 将反馈信息栏压到垂直布局的底层
         self.mainlayout.addWidget(self.textEdit)  # 将反馈信息栏添加到整体布局中
 
-        self.setLayout(self.mainlayout)  # 将Preprocess这个分组件应用上设置好的整体布局
+        self.setLayout(self.mainlayout)
         self.setGeometry(300, 300, 450, 500)
         self.show()
 
-
     def initUI(self):
-        # 栅格布局第一列是参数名称
+
         projectFolder = QLabel('Project Folder')
-        embryoNames = QLabel('Embryo Names')
-        maxTime = QLabel('Max Time')
-        batchSize = QLabel('Batch Size')
-        lineageFile = QLabel('Lineage File')
-        modelFile = QLabel('Model File')
-        # 栅格布局第二列是参数输入框
+        embryoName = QLabel('Embryo Name')
+        modelName = QLabel('Model Name')
+        binaryMemb = QLabel('Segmented Membrane')
+        binaryNuc = QLabel('Segmented Nucleus')
+        kernelSize = QLabel('Kernel Size')
+        kernelStructure = QLabel('Kernel Structure')
+        Nuc = QLabel("Nucleus Position")
+
         self.projectFolderEdit = QLineEdit()
-        self.maxTimeEdit = QLineEdit()
-        self.batchSizeEdit = QLineEdit()
-        self.modelFileEdit = QLineEdit()
-        # 栅格布局第三列是参数选择按钮
+        self.embryoNameEdit = QComboBox()
+        self.modelNameEdit = QComboBox()
+        binaryMembEdit = QComboBox()
+        binaryNucEdit = QComboBox()
+        self.kernelStructureEdit = QComboBox()
+        self.kernelStructureEdit.addItems(["cube", "ball"])
+        self.kernelSizeEdit = QComboBox()
+        self.kernelSizeEdit.addItems(["3", "5", "7"])
+        self.Nuc = QCheckBox('Whether to use segmented Nucleus position to segment whole cell')
+        self.Nuc.stateChanged.connect(self.Nucchange)
+        self.Nucinput = False
+
         projectFolderBtn = QPushButton("Select")
         projectFolderBtn.clicked.connect(self.chooseProjectFolder)
-        self.embryoNamesBtn = QComboBox()
-        self.lineageFileBtn = QComboBox()
-        modelFileBtn = QPushButton("Select")
-        modelFileBtn.clicked.connect(self.chooseModelFile)
 
         grid = QGridLayout()
         grid.setSpacing(30)
@@ -63,28 +88,86 @@ class Cell_Segmentation(QWidget):
         grid.addWidget(self.projectFolderEdit, 1, 1)
         grid.addWidget(projectFolderBtn, 1, 2)
 
+        grid.addWidget(embryoName, 2, 0)
+        grid.addWidget(self.embryoNameEdit, 2, 1)
 
+        grid.addWidget(modelName, 3, 0)
+        grid.addWidget(self.modelNameEdit, 3, 1)
 
+        grid.addWidget(binaryMemb, 4, 0)
+        grid.addWidget(binaryMembEdit, 4, 1)
 
+        grid.addWidget(binaryNuc, 5, 0)
+        grid.addWidget(binaryNucEdit, 5, 1)
 
+        grid.addWidget(kernelStructure, 6, 0)
+        grid.addWidget(self.kernelStructureEdit, 6, 1)
+
+        grid.addWidget(kernelSize, 7, 0)
+        grid.addWidget(self.kernelSizeEdit, 7, 1)
+
+        grid.addWidget(Nuc, 8, 0)
+        grid.addWidget(self.Nuc, 8, 1)
 
         self.mainlayout.addLayout(grid)
 
     def chooseProjectFolder(self):
-        pass
+        dirName = QFileDialog.getExistingDirectory(self, 'Choose RawStack Folder', './')
+        try:
+            self.textEdit.clear()
+            self.embryoNameEdit.clear()
+            self.projectFolderEdit.setText(dirName)
+            if dirName:
+                listdir = [x for x in os.listdir(os.path.join(dirName, "SegStack")) if not x.startswith(".")]
+                listdir.sort()
+                self.embryoNameEdit.addItems(listdir)
+        except Exception as e:
+            self.textEdit.setText(traceback.format_exc())
+            QMessageBox.warning(self, 'Warning!', 'Please Choose Right Folder!')
 
-    def chooseModelFile(self):
-        pass
+    def Autofillblank(self, embryo_name):
+        try:
+            raw_memb_files = glob.glob(os.path.join(self.rawFolderEdit.text(), embryo_name, "tifR", "*.tif"))
+            raw_memb_img = raw_memb_files[-1]
+            max_time = re.findall(r"\d{2,3}", raw_memb_img)[-2]
+            num_slice = re.findall(r"\d{2,3}", raw_memb_img)[-1]
+
+            self.maxTimeEdit.setText(max_time)
+            self.sliceNumEdit.setText(num_slice)
+            self.xLengthEdit.setText("256")
+            self.yLengthEdit.setText("356")
+            self.zLengthEdit.setText("160")
+            self.reduceRationEdit.setText("1.0")
+        except:
+            self.textEdit.setText(traceback.format_exc())
+            QMessageBox.warning(self, 'Error!', 'Please check your paras!')
+
 
     def runSegmentation(self):
         pass
 
-    def stopSegmentation(self):
+    def pauseSegmentation(self):
         pass
+
+    def cancelSegmentation(self):
+        pass
+
+    def resumeSegmentation(self):
+        pass
+
+    def completeSegmentation(self, value):
+        pass
+
+    def Nucchange(self, state):
+        if state == Qt.Checked:
+            self.Nuc.setText("Use segmented Nucleus infomation")
+            self.Nucinput = True
+        else:
+            self.Nuc.setText("Use h_maxima to calculate nucleus position")
+            self.Nucinput = False
 
 
 if __name__ == '__main__':
-
     app = QApplication(sys.argv)
     ex = Cell_Segmentation()
     sys.exit(app.exec_())
