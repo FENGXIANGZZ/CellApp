@@ -1,4 +1,4 @@
-net: TUNETr #  Network used for training.
+net: SwinUNETR #  Network used for training.
 # network parameters - import
 net_params:
   img_size: (128,128,128)

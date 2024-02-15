@@ -15,6 +15,7 @@ import numpy as np
 import ast
 from skimage.transform import resize
 import nibabel as nib
+import collections
 
 
 class Memb_Segmentation(QWidget):
@@ -150,9 +151,19 @@ class Memb_Segmentation(QWidget):
                 assert torch.cuda.is_available()
                 device = torch.device("cuda:0")
                 model = model.to(device)
+                check_point = torch.load(para.get("trained_model"))
+                state = check_point.get("state_dict")
+                new_state = collections.OrderedDict([(key[7:], value) for key, value in state.items()])
+                model.load_state_dict(new_state)
             else:
                 device = torch.device("cpu")
                 model = model.to(device)
+                check_point = torch.load(para.get("trained_model"), map_location="cpu")
+                state = check_point.get("state_dict")
+                new_state = collections.OrderedDict([(key[7:], value) for key, value in state.items()])
+                model.load_state_dict(new_state)
+
+
         except:
             para.clear()
             self.textEdit.setText(traceback.format_exc())
@@ -187,7 +198,8 @@ class Memb_Segmentation(QWidget):
                                            order=1,
                                            anti_aliasing=True)
 
-                        save_path = os.path.join(self.projectFolderEdit.text(), "SegStack", self.embryoNameBtn.currentText(),
+                        save_path = os.path.join(self.projectFolderEdit.text(), "SegStack",
+                                                 self.embryoNameBtn.currentText(),
                                                  "SegMemb", self.modelNameEdit.currentText())
                         if not os.path.isdir(save_path):
                             os.makedirs(save_path)
