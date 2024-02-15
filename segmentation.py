@@ -6,7 +6,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QThread
 from membrane_seg import Memb_Segmentation
 from nucleus_seg import Nucleus_Segmentation
 from cell_seg import Cell_Segmentation
-
+import os
 
 class Segmentation(QWidget):
 
@@ -33,7 +33,21 @@ class Segmentation(QWidget):
         self.show()
 
     def updateBlankInfo(self):
-        pass
+        if self.subfunctionbar.currentIndex() == 1: #当按钮点到 nucleus segmentation
+            if self.membsegment.projectFolderEdit.text():
+                self.nucsegment.projectFolderEdit.setText(self.membsegment.projectFolderEdit.text())
+
+
+        elif self.subfunctionbar.currentIndex() == 2:
+            if self.membsegment.projectFolderEdit.text():
+                self.cellsegment.projectFolderEdit.setText(self.membsegment.projectFolderEdit.text())
+                self.cellsegment.embryoNameEdit.clear()
+                if os.path.isdir(os.path.join(self.membsegment.projectFolderEdit.text(), "SegStack")):
+                    listdir = [x for x in os.listdir(os.path.join(self.membsegment.projectFolderEdit.text(), "SegStack")) if not x.startswith(".")]
+                    listdir.sort()
+                    self.cellsegment.embryoNameEdit.addItems(listdir)
+                else:
+                    os.makedirs(os.path.join(self.membsegment.projectFolderEdit.text(), "SegStack"))
 
 
 if __name__ == '__main__':

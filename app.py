@@ -176,19 +176,7 @@ class App(QMainWindow):
 
 
         if self.functionbar.currentIndex() == 2: #当按钮点到analysis
-            if self.preprocess.rawFolderEdit.text():
-                self.analysis.rawFolderEdit.setText(self.preprocess.rawFolderEdit.text())
-                self.analysis.embryoNamesBtn.clear()
-                listdir = [x for x in os.listdir(self.preprocess.rawFolderEdit.text()) if not x.startswith(".")]
-                listdir.sort()
-                self.analysis.embryoNamesBtn.addItems(listdir)
-            if self.preprocess.xyResoluEdit.text():
-                self.analysis.xyResoluEdit.setText(self.preprocess.xyResoluEdit.text())
-            if self.preprocess.sliceNumEdit.text():
-                self.analysis.sliceNumEdit.setText(self.preprocess.sliceNumEdit.text())
-            if self.preprocess.projectFolderEdit.text():
-                self.analysis.projectFolderEdit.setText(self.preprocess.projectFolderEdit.text())
-
+            pass
 
 
 if __name__ == '__main__':

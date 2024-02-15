@@ -67,9 +67,11 @@ class Cell_Segmentation(QWidget):
 
         self.projectFolderEdit = QLineEdit()
         self.embryoNameEdit = QComboBox()
+        self.embryoNameEdit.activated[str].connect(self.Autofillmodel)
         self.modelNameEdit = QComboBox()
-        binaryMembEdit = QComboBox()
-        binaryNucEdit = QComboBox()
+        self.modelNameEdit.activated[str].connect(self.Autofillmemb)
+        self.binaryMembEdit = QComboBox()
+        self.binaryNucEdit = QComboBox()
         self.kernelStructureEdit = QComboBox()
         self.kernelStructureEdit.addItems(["cube", "ball"])
         self.kernelSizeEdit = QComboBox()
@@ -82,7 +84,7 @@ class Cell_Segmentation(QWidget):
         projectFolderBtn.clicked.connect(self.chooseProjectFolder)
 
         grid = QGridLayout()
-        grid.setSpacing(30)
+        grid.setSpacing(20)
 
         grid.addWidget(projectFolder, 1, 0)
         grid.addWidget(self.projectFolderEdit, 1, 1)
@@ -95,10 +97,10 @@ class Cell_Segmentation(QWidget):
         grid.addWidget(self.modelNameEdit, 3, 1)
 
         grid.addWidget(binaryMemb, 4, 0)
-        grid.addWidget(binaryMembEdit, 4, 1)
+        grid.addWidget(self.binaryMembEdit, 4, 1)
 
         grid.addWidget(binaryNuc, 5, 0)
-        grid.addWidget(binaryNucEdit, 5, 1)
+        grid.addWidget(self.binaryNucEdit, 5, 1)
 
         grid.addWidget(kernelStructure, 6, 0)
         grid.addWidget(self.kernelStructureEdit, 6, 1)
@@ -125,23 +127,41 @@ class Cell_Segmentation(QWidget):
             self.textEdit.setText(traceback.format_exc())
             QMessageBox.warning(self, 'Warning!', 'Please Choose Right Folder!')
 
-    def Autofillblank(self, embryo_name):
+    def Autofillmodel(self, embryo_name):
         try:
-            raw_memb_files = glob.glob(os.path.join(self.rawFolderEdit.text(), embryo_name, "tifR", "*.tif"))
-            raw_memb_img = raw_memb_files[-1]
-            max_time = re.findall(r"\d{2,3}", raw_memb_img)[-2]
-            num_slice = re.findall(r"\d{2,3}", raw_memb_img)[-1]
+            self.modelNameEdit.clear()
+            self.binaryMembEdit.clear()
+            self.binaryNucEdit.clear()
 
-            self.maxTimeEdit.setText(max_time)
-            self.sliceNumEdit.setText(num_slice)
-            self.xLengthEdit.setText("256")
-            self.yLengthEdit.setText("356")
-            self.zLengthEdit.setText("160")
-            self.reduceRationEdit.setText("1.0")
+            model_list = [x for x in os.listdir(os.path.join(self.projectFolderEdit.text(), "SegStack", embryo_name)) if
+                          not (x.startswith(".") or x == "SegNuc")]
+            model_list.sort()
+            self.modelNameEdit.addItems(model_list)
+
+            seg_nuc_files = glob.glob(
+                os.path.join(self.projectFolderEdit.text(), "SegStack", embryo_name,
+                             "SegNuc", "*.nii.gz"))
+            seg_nuc_files.sort()
+            self.binaryNucEdit.addItems(seg_nuc_files)
+
         except:
             self.textEdit.setText(traceback.format_exc())
-            QMessageBox.warning(self, 'Error!', 'Please check your paras!')
+            QMessageBox.warning(self, 'Error!', 'Please check your path!')
 
+    def Autofillmemb(self, model_name):
+        try:
+            self.binaryMembEdit.clear()
+
+            seg_memb_files = glob.glob(
+                os.path.join(self.projectFolderEdit.text(), "SegStack", self.embryoNameEdit.currentText(), model_name,
+                             "SegMemb", "*.nii.gz"))
+            seg_memb_files.sort()
+            self.binaryMembEdit.addItems(seg_memb_files)
+
+
+        except:
+            self.textEdit.setText(traceback.format_exc())
+            QMessageBox.warning(self, 'Error!', 'Please check your path!')
 
     def runSegmentation(self):
         pass
