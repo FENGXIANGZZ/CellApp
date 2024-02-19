@@ -334,7 +334,7 @@ class PreprocessThread(QThread):
                 self.combine_both_slices()
 
         except Exception:
-            self.quit()
+            self.cancel()
 
     def combine_nucleus_slices(self):
         """
